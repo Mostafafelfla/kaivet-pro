@@ -1,11 +1,10 @@
-import { eq } from "drizzle-orm";
+import { eq, and, gte, lte, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, users, clinics, veterinarians, services, patients, appointments, cases, inventory, suppliers, transactions, chatSessions, chatMessages, promotions, todos } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
@@ -35,7 +34,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     };
     const updateSet: Record<string, unknown> = {};
 
-    const textFields = ["name", "email", "loginMethod"] as const;
+    const textFields = ["name", "email", "phone", "loginMethod"] as const;
     type TextField = (typeof textFields)[number];
 
     const assignNullable = (field: TextField) => {
@@ -85,8 +84,126 @@ export async function getUserByOpenId(openId: string) {
   }
 
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// Clinic queries
+export async function getClinicById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(clinics).where(eq(clinics.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getClinicsByOwnerId(ownerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(clinics).where(eq(clinics.ownerId, ownerId));
+}
+
+// Veterinarian queries
+export async function getVeterinariansByClinicId(clinicId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(veterinarians).where(eq(veterinarians.clinicId, clinicId));
+}
+
+// Service queries
+export async function getServicesByClinicId(clinicId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(services).where(eq(services.clinicId, clinicId));
+}
+
+// Patient queries
+export async function getPatientsByClinicId(clinicId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(patients).where(eq(patients.clinicId, clinicId));
+}
+
+export async function getPatientsByOwnerId(ownerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(patients).where(eq(patients.ownerId, ownerId));
+}
+
+// Appointment queries
+export async function getAppointmentsByClinicId(clinicId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(appointments).where(eq(appointments.clinicId, clinicId)).orderBy(desc(appointments.appointmentDate));
+}
+
+export async function getAppointmentsByPatientId(patientId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(appointments).where(eq(appointments.patientId, patientId)).orderBy(desc(appointments.appointmentDate));
+}
+
+// Case queries
+export async function getCasesByClinicId(clinicId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(cases).where(eq(cases.clinicId, clinicId)).orderBy(desc(cases.createdAt));
+}
+
+export async function getCasesByPatientId(patientId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(cases).where(eq(cases.patientId, patientId)).orderBy(desc(cases.createdAt));
+}
+
+// Inventory queries
+export async function getInventoryByClinicId(clinicId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(inventory).where(eq(inventory.clinicId, clinicId)).orderBy(desc(inventory.updatedAt));
+}
+
+// Supplier queries
+export async function getSuppliersByClinicId(clinicId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(suppliers).where(eq(suppliers.clinicId, clinicId));
+}
+
+// Transaction queries
+export async function getTransactionsByClinicId(clinicId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(transactions).where(eq(transactions.clinicId, clinicId)).orderBy(desc(transactions.createdAt));
+}
+
+// Chat queries
+export async function getChatSessionsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(chatSessions).where(eq(chatSessions.userId, userId)).orderBy(desc(chatSessions.updatedAt));
+}
+
+export async function getChatMessagesBySessionId(sessionId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(chatMessages).where(eq(chatMessages.sessionId, sessionId)).orderBy(desc(chatMessages.createdAt));
+}
+
+// Promotion queries
+export async function getPromotionsByClinicId(clinicId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(promotions).where(eq(promotions.clinicId, clinicId));
+}
+
+// Todo queries
+export async function getTodosByClinicId(clinicId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(todos).where(eq(todos.clinicId, clinicId)).orderBy(desc(todos.createdAt));
+}
+
+export async function getTodosByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(todos).where(eq(todos.userId, userId)).orderBy(desc(todos.createdAt));
+}
