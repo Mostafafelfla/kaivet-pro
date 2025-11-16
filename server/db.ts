@@ -1,6 +1,10 @@
 import { eq, and, gte, lte, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, clinics, veterinarians, services, patients, appointments, cases, inventory, suppliers, transactions, chatSessions, chatMessages, promotions, todos } from "../drizzle/schema";
+import { 
+  InsertUser, users, clinics, veterinarians, services, patients, appointments, cases, 
+  inventory, suppliers, transactions, chatSessions, chatMessages, promotions, todos,
+  vaccinations, medicalTests, prescriptions
+} from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -128,6 +132,50 @@ export async function getPatientsByOwnerId(ownerId: number) {
   return db.select().from(patients).where(eq(patients.ownerId, ownerId));
 }
 
+export async function getPatientById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(patients).where(eq(patients.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+// Vaccination queries
+export async function getVaccinationsByPatientId(patientId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(vaccinations).where(eq(vaccinations.patientId, patientId)).orderBy(desc(vaccinations.administrationDate));
+}
+
+export async function getVaccinationsByClinicId(clinicId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(vaccinations).where(eq(vaccinations.clinicId, clinicId)).orderBy(desc(vaccinations.administrationDate));
+}
+
+export async function getOverdueVaccinations(clinicId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(vaccinations)
+    .where(and(
+      eq(vaccinations.clinicId, clinicId),
+      eq(vaccinations.status, "overdue")
+    ))
+    .orderBy(desc(vaccinations.nextDueDate));
+}
+
+// Medical test queries
+export async function getMedicalTestsByPatientId(patientId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(medicalTests).where(eq(medicalTests.patientId, patientId)).orderBy(desc(medicalTests.testDate));
+}
+
+export async function getMedicalTestsByCaseId(caseId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(medicalTests).where(eq(medicalTests.caseId, caseId)).orderBy(desc(medicalTests.testDate));
+}
+
 // Appointment queries
 export async function getAppointmentsByClinicId(clinicId: number) {
   const db = await getDb();
@@ -154,11 +202,50 @@ export async function getCasesByPatientId(patientId: number) {
   return db.select().from(cases).where(eq(cases.patientId, patientId)).orderBy(desc(cases.createdAt));
 }
 
+export async function getCaseById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(cases).where(eq(cases.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+// Prescription queries
+export async function getPrescriptionsByCaseId(caseId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(prescriptions).where(eq(prescriptions.caseId, caseId)).orderBy(desc(prescriptions.createdAt));
+}
+
+export async function getPrescriptionsByPatientId(patientId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(prescriptions).where(eq(prescriptions.patientId, patientId)).orderBy(desc(prescriptions.createdAt));
+}
+
+export async function getActivePrescriptions(patientId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(prescriptions)
+    .where(and(
+      eq(prescriptions.patientId, patientId),
+      eq(prescriptions.status, "active")
+    ))
+    .orderBy(desc(prescriptions.createdAt));
+}
+
 // Inventory queries
 export async function getInventoryByClinicId(clinicId: number) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(inventory).where(eq(inventory.clinicId, clinicId)).orderBy(desc(inventory.updatedAt));
+}
+
+export async function getLowStockItems(clinicId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  // This is a simplified version - in production, you'd use a raw query for better performance
+  const items = await db.select().from(inventory).where(eq(inventory.clinicId, clinicId));
+  return items.filter(item => item.quantity <= (item.minQuantity || 5));
 }
 
 // Supplier queries

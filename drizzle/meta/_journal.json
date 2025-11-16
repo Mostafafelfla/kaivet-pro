@@ -15,6 +15,13 @@
       "when": 1762767799119,
       "tag": "0001_cloudy_mysterio",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1762768182487,
+      "tag": "0002_noisy_thor_girl",
+      "breakpoints": true
     }
   ]
 }

@@ -11,10 +11,12 @@ import {
   getServicesByClinicId,
   getPatientsByClinicId,
   getPatientsByOwnerId,
+  getPatientById,
   getAppointmentsByClinicId,
   getAppointmentsByPatientId,
   getCasesByClinicId,
   getCasesByPatientId,
+  getCaseById,
   getInventoryByClinicId,
   getSuppliersByClinicId,
   getTransactionsByClinicId,
@@ -23,10 +25,24 @@ import {
   getPromotionsByClinicId,
   getTodosByClinicId,
   getTodosByUserId,
+  getVaccinationsByPatientId,
+  getVaccinationsByClinicId,
+  getOverdueVaccinations,
+  getMedicalTestsByPatientId,
+  getMedicalTestsByCaseId,
+  getPrescriptionsByCaseId,
+  getPrescriptionsByPatientId,
+  getActivePrescriptions,
+  getLowStockItems,
   getDb,
 } from "./db";
 import { TRPCError } from "@trpc/server";
-import { clinics, veterinarians, services, patients, appointments, cases, inventory, suppliers, transactions, chatSessions, chatMessages, promotions, todos } from "../drizzle/schema";
+import { 
+  clinics, veterinarians, services, patients, appointments, cases, 
+  inventory, suppliers, transactions, chatSessions, chatMessages, promotions, todos,
+  vaccinations, medicalTests, prescriptions
+} from "../drizzle/schema";
+import { invokeLLM } from "./_core/llm";
 
 export const appRouter = router({
   system: systemRouter,
@@ -178,6 +194,12 @@ export const appRouter = router({
         return getPatientsByOwnerId(ctx.user.id);
       }),
 
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        return getPatientById(input.id);
+      }),
+
     create: protectedProcedure
       .input(z.object({
         clinicId: z.number(),
@@ -188,6 +210,8 @@ export const appRouter = router({
         weight: z.string().optional(),
         color: z.string().optional(),
         microchipId: z.string().optional(),
+        allergies: z.string().optional(),
+        bloodType: z.string().optional(),
         medicalHistory: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
@@ -197,6 +221,104 @@ export const appRouter = router({
         const result = await db.insert(patients).values({
           ...input,
           ownerId: ctx.user.id,
+        });
+
+        return result;
+      }),
+  }),
+
+  // Vaccination management
+  vaccination: router({
+    listByPatient: protectedProcedure
+      .input(z.object({ patientId: z.number() }))
+      .query(async ({ input }) => {
+        return getVaccinationsByPatientId(input.patientId);
+      }),
+
+    listByClinic: protectedProcedure
+      .input(z.object({ clinicId: z.number() }))
+      .query(async ({ input }) => {
+        return getVaccinationsByClinicId(input.clinicId);
+      }),
+
+    getOverdue: protectedProcedure
+      .input(z.object({ clinicId: z.number() }))
+      .query(async ({ input }) => {
+        return getOverdueVaccinations(input.clinicId);
+      }),
+
+    create: protectedProcedure
+      .input(z.object({
+        clinicId: z.number(),
+        patientId: z.number(),
+        veterinarianId: z.number().optional(),
+        vaccineName: z.string().min(1),
+        vaccineType: z.string().optional(),
+        batchNumber: z.string().optional(),
+        administrationDate: z.date(),
+        nextDueDate: z.date().optional(),
+        route: z.string().optional(),
+        site: z.string().optional(),
+        dosage: z.string().optional(),
+        manufacturer: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+        const clinic = await getClinicById(input.clinicId);
+        if (!clinic || clinic.ownerId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+
+        const result = await db.insert(vaccinations).values({
+          ...input,
+          status: "completed",
+        });
+
+        return result;
+      }),
+  }),
+
+  // Medical test management
+  medicalTest: router({
+    listByPatient: protectedProcedure
+      .input(z.object({ patientId: z.number() }))
+      .query(async ({ input }) => {
+        return getMedicalTestsByPatientId(input.patientId);
+      }),
+
+    listByCase: protectedProcedure
+      .input(z.object({ caseId: z.number() }))
+      .query(async ({ input }) => {
+        return getMedicalTestsByCaseId(input.caseId);
+      }),
+
+    create: protectedProcedure
+      .input(z.object({
+        clinicId: z.number(),
+        patientId: z.number(),
+        caseId: z.number().optional(),
+        testType: z.string().min(1),
+        testName: z.string().min(1),
+        testDate: z.date(),
+        results: z.string().optional(),
+        normalRange: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+        const clinic = await getClinicById(input.clinicId);
+        if (!clinic || clinic.ownerId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+
+        const result = await db.insert(medicalTests).values({
+          ...input,
+          status: "pending",
         });
 
         return result;
@@ -241,7 +363,7 @@ export const appRouter = router({
       }),
   }),
 
-  // Case management
+  // Case management (Medical cases)
   case: router({
     listByClinic: protectedProcedure
       .input(z.object({ clinicId: z.number() }))
@@ -255,15 +377,24 @@ export const appRouter = router({
         return getCasesByPatientId(input.patientId);
       }),
 
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        return getCaseById(input.id);
+      }),
+
     create: protectedProcedure
       .input(z.object({
         clinicId: z.number(),
         patientId: z.number(),
         veterinarianId: z.number().optional(),
         title: z.string().min(1),
+        symptoms: z.string().optional(),
         diagnosis: z.string().optional(),
         treatment: z.string().optional(),
         prescription: z.string().optional(),
+        severity: z.enum(["low", "medium", "high", "critical"]).optional(),
+        prognosis: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const db = await getDb();
@@ -274,7 +405,94 @@ export const appRouter = router({
           throw new TRPCError({ code: "FORBIDDEN" });
         }
 
-        const result = await db.insert(cases).values(input);
+        const caseNumber = `CASE-${Date.now()}`;
+        const result = await db.insert(cases).values({
+          ...input,
+          caseNumber,
+          status: "open",
+        });
+
+        return result;
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        clinicId: z.number(),
+        symptoms: z.string().optional(),
+        diagnosis: z.string().optional(),
+        treatment: z.string().optional(),
+        prescription: z.string().optional(),
+        followUpNotes: z.string().optional(),
+        status: z.enum(["open", "in_progress", "closed"]).optional(),
+        severity: z.enum(["low", "medium", "high", "critical"]).optional(),
+        prognosis: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+        const clinic = await getClinicById(input.clinicId);
+        if (!clinic || clinic.ownerId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+
+        const { id, clinicId, ...updateData } = input;
+        await db.update(cases).set(updateData).where(eq(cases.id, id));
+        return getCaseById(id);
+      }),
+  }),
+
+  // Prescription management
+  prescription: router({
+    listByCase: protectedProcedure
+      .input(z.object({ caseId: z.number() }))
+      .query(async ({ input }) => {
+        return getPrescriptionsByCaseId(input.caseId);
+      }),
+
+    listByPatient: protectedProcedure
+      .input(z.object({ patientId: z.number() }))
+      .query(async ({ input }) => {
+        return getPrescriptionsByPatientId(input.patientId);
+      }),
+
+    listActive: protectedProcedure
+      .input(z.object({ patientId: z.number() }))
+      .query(async ({ input }) => {
+        return getActivePrescriptions(input.patientId);
+      }),
+
+    create: protectedProcedure
+      .input(z.object({
+        clinicId: z.number(),
+        caseId: z.number(),
+        patientId: z.number(),
+        medicationName: z.string().min(1),
+        dosage: z.string().min(1),
+        frequency: z.string().min(1),
+        duration: z.string().optional(),
+        route: z.string().optional(),
+        instructions: z.string().optional(),
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
+        refills: z.number().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+        const clinic = await getClinicById(input.clinicId);
+        if (!clinic || clinic.ownerId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+
+        const result = await db.insert(prescriptions).values({
+          ...input,
+          status: "active",
+        });
+
         return result;
       }),
   }),
@@ -285,6 +503,12 @@ export const appRouter = router({
       .input(z.object({ clinicId: z.number() }))
       .query(async ({ input }) => {
         return getInventoryByClinicId(input.clinicId);
+      }),
+
+    getLowStock: protectedProcedure
+      .input(z.object({ clinicId: z.number() }))
+      .query(async ({ input }) => {
+        return getLowStockItems(input.clinicId);
       }),
 
     create: protectedProcedure
@@ -377,7 +601,7 @@ export const appRouter = router({
       }),
   }),
 
-  // Chat management
+  // AI Chat management with medical consultation
   chat: router({
     listSessions: protectedProcedure
       .query(async ({ ctx }) => {
@@ -393,7 +617,9 @@ export const appRouter = router({
     createSession: protectedProcedure
       .input(z.object({
         clinicId: z.number(),
+        patientId: z.number().optional(),
         title: z.string().optional(),
+        context: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const db = await getDb();
@@ -407,18 +633,70 @@ export const appRouter = router({
         return result;
       }),
 
-    addMessage: protectedProcedure
+    sendMessage: protectedProcedure
       .input(z.object({
         sessionId: z.number(),
-        role: z.enum(["user", "assistant"]),
-        content: z.string(),
+        content: z.string().min(1),
       }))
       .mutation(async ({ input, ctx }) => {
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-        const result = await db.insert(chatMessages).values(input);
-        return result;
+        // Save user message
+        await db.insert(chatMessages).values({
+          sessionId: input.sessionId,
+          role: "user" as const,
+          content: input.content,
+        });
+
+        // Get AI response
+        try {
+          const response = await invokeLLM({
+            messages: [
+              {
+                role: "system" as const,
+                content: "You are an expert veterinary consultant AI. Provide professional medical advice for veterinary cases. Always recommend consulting with a licensed veterinarian for serious conditions. Be concise and clear."
+              },
+              {
+                role: "user" as const,
+                content: input.content
+              }
+            ]
+          });
+
+          const aiMessage = typeof response.choices[0]?.message?.content === 'string' 
+          ? response.choices[0].message.content 
+          : "I couldn't generate a response. Please try again.";
+
+          // Save AI response
+          await db.insert(chatMessages).values({
+            sessionId: input.sessionId,
+            role: "assistant" as const,
+            content: aiMessage,
+          });
+
+          return {
+            success: true,
+            userMessage: input.content,
+            aiMessage: aiMessage
+          };
+        } catch (error) {
+          console.error("AI error:", error);
+          // Return a fallback response instead of throwing
+          const fallbackMessage = "I'm having trouble processing your request. Please try again or consult with a veterinarian directly.";
+          
+          await db.insert(chatMessages).values({
+            sessionId: input.sessionId,
+            role: "assistant" as const,
+            content: fallbackMessage,
+          });
+          
+          return {
+            success: false,
+            userMessage: input.content,
+            aiMessage: fallbackMessage
+          };
+        }
       }),
   }),
 

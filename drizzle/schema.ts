@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, boolean, datetime } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, boolean, datetime, json } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -102,6 +102,8 @@ export const patients = mysqlTable("patients", {
   microchipId: varchar("microchipId", { length: 100 }),
   photo: varchar("photo", { length: 500 }),
   medicalHistory: text("medicalHistory"),
+  allergies: text("allergies"),
+  bloodType: varchar("bloodType", { length: 50 }),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -109,6 +111,54 @@ export const patients = mysqlTable("patients", {
 
 export type Patient = typeof patients.$inferSelect;
 export type InsertPatient = typeof patients.$inferInsert;
+
+/**
+ * Vaccination records
+ */
+export const vaccinations = mysqlTable("vaccinations", {
+  id: int("id").autoincrement().primaryKey(),
+  clinicId: int("clinicId").notNull(),
+  patientId: int("patientId").notNull(),
+  veterinarianId: int("veterinarianId"),
+  vaccineName: varchar("vaccineName", { length: 255 }).notNull(),
+  vaccineType: varchar("vaccineType", { length: 100 }),
+  batchNumber: varchar("batchNumber", { length: 100 }),
+  administrationDate: datetime("administrationDate").notNull(),
+  nextDueDate: datetime("nextDueDate"),
+  route: varchar("route", { length: 50 }), // oral, injection, etc
+  site: varchar("site", { length: 100 }), // injection site
+  dosage: varchar("dosage", { length: 100 }),
+  manufacturer: varchar("manufacturer", { length: 255 }),
+  notes: text("notes"),
+  status: mysqlEnum("status", ["completed", "pending", "overdue"]).default("completed").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Vaccination = typeof vaccinations.$inferSelect;
+export type InsertVaccination = typeof vaccinations.$inferInsert;
+
+/**
+ * Medical tests and lab results
+ */
+export const medicalTests = mysqlTable("medicalTests", {
+  id: int("id").autoincrement().primaryKey(),
+  clinicId: int("clinicId").notNull(),
+  patientId: int("patientId").notNull(),
+  caseId: int("caseId"),
+  testType: varchar("testType", { length: 100 }).notNull(),
+  testName: varchar("testName", { length: 255 }).notNull(),
+  testDate: datetime("testDate").notNull(),
+  results: text("results"),
+  normalRange: varchar("normalRange", { length: 255 }),
+  status: mysqlEnum("status", ["pending", "completed", "abnormal"]).default("pending").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type MedicalTest = typeof medicalTests.$inferSelect;
+export type InsertMedicalTest = typeof medicalTests.$inferInsert;
 
 /**
  * Appointments
@@ -139,16 +189,47 @@ export const cases = mysqlTable("cases", {
   patientId: int("patientId").notNull(),
   veterinarianId: int("veterinarianId"),
   title: varchar("title", { length: 255 }).notNull(),
+  caseNumber: varchar("caseNumber", { length: 50 }).unique(),
+  symptoms: text("symptoms"),
   diagnosis: text("diagnosis"),
   treatment: text("treatment"),
   prescription: text("prescription"),
+  followUpNotes: text("followUpNotes"),
   status: mysqlEnum("status", ["open", "in_progress", "closed"]).default("open").notNull(),
+  severity: mysqlEnum("severity", ["low", "medium", "high", "critical"]).default("medium"),
+  prognosis: text("prognosis"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type Case = typeof cases.$inferSelect;
 export type InsertCase = typeof cases.$inferInsert;
+
+/**
+ * Prescriptions
+ */
+export const prescriptions = mysqlTable("prescriptions", {
+  id: int("id").autoincrement().primaryKey(),
+  clinicId: int("clinicId").notNull(),
+  caseId: int("caseId").notNull(),
+  patientId: int("patientId").notNull(),
+  medicationName: varchar("medicationName", { length: 255 }).notNull(),
+  dosage: varchar("dosage", { length: 100 }).notNull(),
+  frequency: varchar("frequency", { length: 100 }).notNull(),
+  duration: varchar("duration", { length: 100 }),
+  route: varchar("route", { length: 50 }), // oral, injection, topical, etc
+  instructions: text("instructions"),
+  startDate: datetime("startDate"),
+  endDate: datetime("endDate"),
+  refills: int("refills"),
+  status: mysqlEnum("status", ["active", "completed", "discontinued"]).default("active").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Prescription = typeof prescriptions.$inferSelect;
+export type InsertPrescription = typeof prescriptions.$inferInsert;
 
 /**
  * Inventory management
@@ -214,13 +295,15 @@ export type Transaction = typeof transactions.$inferSelect;
 export type InsertTransaction = typeof transactions.$inferInsert;
 
 /**
- * Chat sessions for AI assistant
+ * AI Chat sessions for medical consultation
  */
 export const chatSessions = mysqlTable("chatSessions", {
   id: int("id").autoincrement().primaryKey(),
   clinicId: int("clinicId").notNull(),
   userId: int("userId").notNull(),
+  patientId: int("patientId"),
   title: varchar("title", { length: 255 }),
+  context: text("context"), // medical context for AI
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -229,13 +312,14 @@ export type ChatSession = typeof chatSessions.$inferSelect;
 export type InsertChatSession = typeof chatSessions.$inferInsert;
 
 /**
- * Chat messages
+ * Chat messages with AI
  */
 export const chatMessages = mysqlTable("chatMessages", {
   id: int("id").autoincrement().primaryKey(),
   sessionId: int("sessionId").notNull(),
-  role: mysqlEnum("role", ["user", "assistant"]).notNull(),
+  role: mysqlEnum("role", ["user", "assistant", "system"]).notNull(),
   content: text("content").notNull(),
+  metadata: json("metadata"), // store additional data like suggestions, confidence scores
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

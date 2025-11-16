@@ -6,6 +6,12 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
+import MedicalCases from "./pages/MedicalCases";
+import Vaccinations from "./pages/Vaccinations";
+import AIMedicalConsultation from "./pages/AIMedicalConsultation";
+import Patients from "./pages/Patients";
+import Analytics from "./pages/Analytics";
+import Appointments from "./pages/Appointments";
 import DashboardLayout from "./components/DashboardLayout";
 import { useAuth } from "./_core/hooks/useAuth";
 import { Loader2 } from "lucide-react";
@@ -37,6 +43,60 @@ function Router() {
           <AuthGuard>
             <DashboardLayout>
               <Dashboard />
+            </DashboardLayout>
+          </AuthGuard>
+        )}
+      </Route>
+      <Route path={"/medical-cases"}>
+        {() => (
+          <AuthGuard>
+            <DashboardLayout>
+              <MedicalCases />
+            </DashboardLayout>
+          </AuthGuard>
+        )}
+      </Route>
+      <Route path={"/vaccinations"}>
+        {() => (
+          <AuthGuard>
+            <DashboardLayout>
+              <Vaccinations />
+            </DashboardLayout>
+          </AuthGuard>
+        )}
+      </Route>
+      <Route path={"/ai-consultation"}>
+        {() => (
+          <AuthGuard>
+            <DashboardLayout>
+              <AIMedicalConsultation />
+            </DashboardLayout>
+          </AuthGuard>
+        )}
+      </Route>
+      <Route path={"/patients"}>
+        {() => (
+          <AuthGuard>
+            <DashboardLayout>
+              <Patients />
+            </DashboardLayout>
+          </AuthGuard>
+        )}
+      </Route>
+      <Route path={"/analytics"}>
+        {() => (
+          <AuthGuard>
+            <DashboardLayout>
+              <Analytics />
+            </DashboardLayout>
+          </AuthGuard>
+        )}
+      </Route>
+      <Route path={"/appointments"}>
+        {() => (
+          <AuthGuard>
+            <DashboardLayout>
+              <Appointments />
             </DashboardLayout>
           </AuthGuard>
         )}

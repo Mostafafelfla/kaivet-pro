@@ -106,15 +106,15 @@ export default function Dashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Button variant="outline" className="justify-start">
                     <Users className="w-4 h-4 mr-2" />
-                    Add Veterinarian
+                    Medical Cases
                   </Button>
                   <Button variant="outline" className="justify-start">
                     <Calendar className="w-4 h-4 mr-2" />
-                    Schedule Appointment
+                    Vaccinations
                   </Button>
                   <Button variant="outline" className="justify-start">
                     <Pill className="w-4 h-4 mr-2" />
-                    Manage Inventory
+                    AI Consultation
                   </Button>
                   <Button variant="outline" className="justify-start">
                     <TrendingUp className="w-4 h-4 mr-2" />
